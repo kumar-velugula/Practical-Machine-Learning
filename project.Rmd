@@ -1,0 +1,142 @@
+---
+title: "Machine Learning Project"
+author: "Kumar Velugula"
+date: "June 21, 2015"
+output: html_document
+---
+#Executive Summary  
+
+The goal of the project is to predict the manner (how well they have done it) in which a group of 6 enthusiasts did the exercises based on the training/test data collected from accelormeters fitted to different parts of their bodies. Particularly "classe" variable in the training set will be used to predict with. 
+
+This document is a report describing how model is built, how cross validation is used, what the expected out of sample error is, and why certain choices are made in due course.
+
+Based on the detailed analysis presented below, it is possible to accurately predict how well the enthusiast is performing exercise using the Random Forest algorithm.
+
+The data for this project came from this source: http://groupware.les.inf.puc-rio.br/har
+
+Note: To load data and initialize the models/plots it may take upto 1-2 minutes
+
+```{r opts_chunk$set(cache=TRUE)}
+#load dependencies
+#Please make sure listed below packages are installed before proceeding 
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+
+
+##Getting and Cleaning data
+
+```{r echo=TRUE} 
+downloadSourceFiles <- function(){
+        ##check if both the required files exists in the current working directory, 
+        ##if any one of them is missing, re-download the zip file and unzip to download both the files
+        if(file.exists("pml-training.csv") == FALSE
+           | file.exists("pml-testing.csv") == FALSE ){
+                #training data location
+                trainingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+                #The test data are available here: 
+                testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+                ## download file with name "pml-training.csv"
+                download.file(trainingUrl,dest="pml-training.csv", method="curl", mode="wb") 
+                ## download file with name "pml-testing.csv"
+                download.file(testUrl,dest="pml-testing.csv", method="curl", mode="wb") 
+               
+                print ('Required files 1. pml-training.csv and 2. pml-testing.csv are downloaded.')
+                
+        }
+        else {
+                print ('Required files 1. pml-training.csv and 2. pml-testing.csv already exists and not re-downloading')
+        }
+}
+downloadSourceFiles();
+
+#all NA like values including blanks are explicitly set to be interpreted as NA values
+pmlTrainingData <- read.csv("pml-training.csv", na.strings=c("NA",""," "))
+pmlTestingData <- read.csv("pml-testing.csv", na.strings=c("NA",""," "))
+
+#From training data remove columns with all NA values explicitly so that it won't interfere with modeling algorithms
+naPredicate <- apply(pmlTrainingData, 2, function(itemVal) sum(is.na(itemVal)));
+pmlTrainigDataCleaned <- pmlTrainingData[, which(naPredicate == 0)];
+
+#From trainingDataCleaned, remove identifier columns, timestamp etc., as they are not relevant to the modeling
+pmlTrainigDataCleaned <- pmlTrainigDataCleaned[8:length(pmlTrainigDataCleaned)]
+
+
+naPredicateTest <- apply(pmlTestingData, 2, function(itemVal) sum(is.na(itemVal)));
+pmlTestDataCleaned <- pmlTestingData[, which(naPredicateTest == 0)];
+
+#From pmlTestDataCleaned, remove identifier columns, timestamp etc., as they are not relevant to the modeling
+pmlTestDataCleaned <- pmlTestDataCleaned[8:length(pmlTestDataCleaned)]
+
+#Towards reproducibilty setting the seed
+set.seed(654321)
+```
+
+##Exploratory Data Analysis
+
+```{r, echo=TRUE}
+#Quick look at the cleaned data frame
+str(pmlTrainigDataCleaned)
+#Quick preview of the observed data in first 5 columns
+pairs(pmlTrainigDataCleaned[,c(1:5)], pch=3)
+#Quick preview of the observed data in last 5 columns
+pairs(pmlTrainigDataCleaned[,c(48:53)], pch=3)
+```
+
+##Create train/test partitions
+Splitting data set into 70/30 ratio for training and cross validation respectively
+```{r, echo=TRUE}
+#Split the pmlTrainigDataCleaned data into training and cross validation data sets
+inTraining <- createDataPartition(y=pmlTrainigDataCleaned$classe, p=0.7, list=FALSE)
+training <- pmlTrainigDataCleaned[inTraining,]
+crossVal <- pmlTrainigDataCleaned[-inTraining,]
+
+```
+
+##Using Decision Tree algorithm for prediction
+```{r echo=TRUE}
+#generate the model using Decision Tree algorithm
+dtModel <- rpart(classe ~., data=training, method="class")
+#create model plot
+fancyRpartPlot(dtModel)
+#predict using the above model against the crossValidation set
+dtPrediction <- predict(dtModel, crossVal,type="class")
+#generate confusion matrix for reviewing the accuracy levels
+confusionMatrix(dtPrediction, crossVal$classe)
+```
+As seen from the confusion matrix generated from the Decision tree prediction is only 76% and will be evaluating another modeling approach using Random Forest method for improved prediction accuracy
+
+#Using Random Forest algorithm for prediction
+```{r echo=TRUE}
+#generate the model using Random Forest algorithm
+rfModel <- randomForest(classe ~ ., data=training)
+#predict using the above model against the crossValidation set
+rfPrediction <- predict(rfModel, crossVal, type="class")
+#generate confusion matrix for reviewing the accuracy levels
+confusionMatrix(rfPrediction, crossVal$classe)
+```
+
+As seen from the confusion matrix generated from the RF prediction, it is 99.59% and got better results than that from Decision Tree algorithm. RF algorithm accuracy level is satisfactory for the current use case and proceeding to use the model to predict using the cleaned test data. The expected out of sample error rate is of the order of 0.41% based on the above accuracy levels from training/test data sets.
+
+#Use Random Forest model to predict the cleaned test data from the source
+```{r echo=TRUE}
+testPrediction <- predict(rfModel, pmlTestDataCleaned)
+testPrediction
+```
+
+##Generate files for each of the predictions
+```{r echo=TRUE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(testPrediction);
+```
