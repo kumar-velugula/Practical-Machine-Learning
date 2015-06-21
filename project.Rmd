@@ -2,7 +2,7 @@
 title: "Machine Learning Project"
 author: "Kumar Velugula"
 date: "June 21, 2015"
-output: html_document
+output: pdf_document
 ---
 #Executive Summary  
 
@@ -83,7 +83,7 @@ set.seed(654321)
 #Quick look at the cleaned data frame
 str(pmlTrainigDataCleaned)
 #Quick preview of the observed data in first 5 columns
-pairs(pmlTrainigDataCleaned[,c(1:5)], pch=3)
+#pairs(pmlTrainigDataCleaned[,c(1:5)], pch=3)
 #Quick preview of the observed data in last 5 columns
 pairs(pmlTrainigDataCleaned[,c(48:53)], pch=3)
 ```
